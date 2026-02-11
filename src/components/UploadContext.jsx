@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { base44 } from "@/api/base44Client";
 import { useWorkspace } from "@/components/workspace/WorkspaceContext";
+import { analyzeDocument } from "@/services/documentAnalysis";
 
 const UploadContext = createContext();
 
@@ -163,6 +164,9 @@ If you cannot read the document (e.g., it's a non-text image), state that analys
       });
 
       console.log(`AI analysis completed for document: ${document.title}`);
+
+      // Trigger intelligence document analysis (embeddings, entities, confidence)
+      runDocumentAnalysis(document, extractedContent);
       
     } catch (aiError) {
       console.warn(`AI analysis failed for ${fileName}:`, aiError);
@@ -192,6 +196,22 @@ If you cannot read the document (e.g., it's a non-text image), state that analys
         extracted_content: `File uploaded: ${fileName}. ${isFileSizeError ? 'File size exceeded AI analysis limits.' : 'Content analysis was not available.'}`,
         processing_status: 'completed'
       });
+    }
+  }, []);
+
+  const runDocumentAnalysis = useCallback(async (document, textContent) => {
+    try {
+      // Fetch existing documents for similarity comparison
+      const allDocs = await base44.entities.Document.filter(
+        { is_trashed: false, processing_status: 'completed' },
+        '-created_date'
+      );
+
+      await analyzeDocument(document, textContent, allDocs);
+      console.log(`Intelligence analysis completed for: ${document.title}`);
+    } catch (error) {
+      console.warn(`Intelligence analysis failed for ${document.title}:`, error.message);
+      // Non-blocking: document is still usable without analysis
     }
   }, []);
 

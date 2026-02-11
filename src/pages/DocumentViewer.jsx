@@ -4,18 +4,22 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "../utils";
-import { 
+import {
   ArrowLeft, Download, Star, Trash2, ZoomIn, ZoomOut,
-  Maximize2, Minimize2, FileText, Loader2, Sparkles, Share2
+  Maximize2, Minimize2, FileText, Loader2, Sparkles, Share2, ShieldCheck
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import ShareDocumentModal from "../components/permissions/ShareDocumentModal";
+import ConfidenceScore from "../components/documents/ConfidenceScore";
+import EntityChips from "../components/documents/EntityChips";
+import DocumentRelationships from "../components/documents/DocumentRelationships";
 
 export default function DocumentViewer() {
   const [zoom, setZoom] = useState(100);
   const [showSummary, setShowSummary] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showAnalysis, setShowAnalysis] = useState(false);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -188,9 +192,22 @@ export default function DocumentViewer() {
                   variant={showSummary ? "default" : "outline"}
                   size="icon"
                   className={`h-8 w-8 sm:h-9 sm:w-9 md:h-10 md:w-10 lg:h-12 lg:w-12 ${showSummary ? "bg-indigo-600 hover:bg-indigo-700" : ""}`}
-                  onClick={() => setShowSummary(!showSummary)}
+                  onClick={() => { setShowSummary(!showSummary); if (!showSummary) setShowAnalysis(false); }}
                 >
                   <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6" />
+                </Button>
+              )}
+
+              {/* Intelligence Analysis Toggle */}
+              {!isFullscreen && document.metadata?.analysis && (
+                <Button
+                  variant={showAnalysis ? "default" : "outline"}
+                  size="icon"
+                  className={`h-8 w-8 sm:h-9 sm:w-9 md:h-10 md:w-10 lg:h-12 lg:w-12 ${showAnalysis ? "bg-cyan-600 hover:bg-cyan-700" : ""}`}
+                  onClick={() => { setShowAnalysis(!showAnalysis); if (!showAnalysis) setShowSummary(false); }}
+                  title="Intelligence Analysis"
+                >
+                  <ShieldCheck className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6" />
                 </Button>
               )}
 
@@ -285,7 +302,7 @@ export default function DocumentViewer() {
                 <div className="bg-white rounded-lg shadow-sm p-4 md:p-6 lg:sticky lg:top-24">
                   <h3 className="font-semibold text-slate-900 mb-3 text-sm md:text-base">AI Summary</h3>
                   <p className="text-slate-600 leading-relaxed text-xs md:text-sm">{document.ai_summary}</p>
-                  
+
                   {document.key_insights && document.key_insights.length > 0 && (
                     <>
                       <h3 className="font-semibold text-slate-900 mb-3 mt-4 md:mt-6 text-sm md:text-base">Key Insights</h3>
@@ -301,6 +318,47 @@ export default function DocumentViewer() {
                   )}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Right Sidebar - Intelligence Analysis */}
+          {!isFullscreen && showAnalysis && document.metadata?.analysis && (
+            <div className="w-full lg:w-[420px] xl:w-[480px] flex-shrink-0">
+              <div className="bg-neutral-900 rounded-lg shadow-sm p-4 md:p-6 lg:sticky lg:top-24 space-y-5 border border-neutral-800">
+                <h3 className="font-semibold text-white text-sm md:text-base">Intelligence Analysis</h3>
+
+                {/* Confidence Score */}
+                {document.metadata.analysis.confidence_score && (
+                  <ConfidenceScore
+                    confidenceScore={document.metadata.analysis.confidence_score}
+                    variant="full"
+                  />
+                )}
+
+                {/* Extracted Entities */}
+                {document.metadata.analysis.entities && (
+                  <EntityChips
+                    entities={document.metadata.analysis.entities}
+                    variant="full"
+                  />
+                )}
+
+                {/* Document Relationships */}
+                {document.metadata.analysis.relationships && (
+                  <DocumentRelationships
+                    relationships={document.metadata.analysis.relationships}
+                  />
+                )}
+
+                {/* Analysis Metadata */}
+                {document.metadata.analysis.analyzed_at && (
+                  <div className="pt-3 border-t border-neutral-800">
+                    <p className="text-[10px] text-slate-500">
+                      Analyzed: {new Date(document.metadata.analysis.analyzed_at).toLocaleString()}
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>

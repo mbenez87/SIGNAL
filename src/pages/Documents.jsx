@@ -4,9 +4,9 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import CreateFolderModal from "../components/documents/CreateFolderModal";
-import { 
-  Upload, Search, Grid3x3, List, 
-  Filter, SortAsc, Star, Trash2, LayoutGrid, CheckSquare, X, FolderPlus
+import {
+  Upload, Search, Grid3x3, List,
+  Filter, SortAsc, Star, Trash2, LayoutGrid, CheckSquare, X, FolderPlus, Brain
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "../utils";
@@ -14,6 +14,7 @@ import DocumentGrid from "../components/documents/DocumentGrid";
 import DocumentList from "../components/documents/DocumentList";
 import FilterPanel from "../components/documents/FilterPanel";
 import ThumbnailGenerator from "../components/documents/ThumbnailGenerator";
+import SemanticSearch from "../components/documents/SemanticSearch";
 import { logDocumentDelete, logDocumentEdit, logBulkAction } from "../components/audit/AuditTracker";
 
 export default function Documents({ selectedFolder, setSelectedFolder }) {
@@ -25,6 +26,7 @@ export default function Documents({ selectedFolder, setSelectedFolder }) {
   const [selectedDocs, setSelectedDocs] = useState([]);
   const [showThumbnailGen, setShowThumbnailGen] = useState(false);
   const [showCreateFolder, setShowCreateFolder] = useState(false);
+  const [showSemanticSearch, setShowSemanticSearch] = useState(false);
   const [filters, setFilters] = useState({
     category: "all",
     fileType: "all",
@@ -206,10 +208,22 @@ export default function Documents({ selectedFolder, setSelectedFolder }) {
             <div className="flex gap-2 md:gap-3">
               {!selectionMode && (
                   <>
-
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowSemanticSearch(!showSemanticSearch)}
+                      className={`border-neutral-700 ${
+                        showSemanticSearch
+                          ? "bg-cyan-600 text-white hover:bg-cyan-700 border-cyan-600"
+                          : "bg-neutral-800 text-white hover:bg-neutral-700"
+                      }`}
+                    >
+                      <Brain className="w-4 h-4 mr-2" />
+                      Semantic
+                    </Button>
 
                     <Link to={createPageUrl('Upload')}>
-                      <Button 
+                      <Button
                         className="bg-white text-black hover:bg-gray-200"
                         size="sm"
                       >
@@ -328,6 +342,13 @@ export default function Documents({ selectedFolder, setSelectedFolder }) {
           )}
         </div>
       </div>
+
+      {/* Semantic Search Panel */}
+      {showSemanticSearch && (
+        <div className="px-4 md:px-6 pt-4">
+          <SemanticSearch onClose={() => setShowSemanticSearch(false)} />
+        </div>
+      )}
 
       {/* Main Content */}
       <div className="px-4 md:px-6 py-4 md:py-8">

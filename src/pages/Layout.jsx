@@ -4,9 +4,9 @@ import { base44 } from "@/api/base44Client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "react-router-dom";
 import { createPageUrl } from "./utils";
-import { 
-        Home, FileText, Upload, Settings, Menu, X, 
-        FolderPlus, Folder, Brain, Trash2, User, LogOut, Shield, MessageSquare
+import {
+        Home, FileText, Upload, Settings, Menu, X,
+        FolderPlus, Folder, Brain, Trash2, User, LogOut, Shield, MessageSquare, ShieldCheck
       } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import FolderList from "./components/documents/FolderList";
@@ -49,6 +49,7 @@ export default function Layout({ children, currentPageName }) {
     { name: 'Saved Chats', icon: MessageSquare, path: 'SavedChats' },
     { name: 'Workspaces', icon: FolderPlus, path: 'Workspaces' },
     { name: 'Documents', icon: FileText, path: 'Documents' },
+    { name: 'Analysis', icon: ShieldCheck, path: 'DocumentAnalysis' },
     { name: 'Upload', icon: Upload, path: 'Upload' },
     { name: 'Trash', icon: Trash2, path: 'Trash' },
   ];
