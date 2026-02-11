@@ -12,6 +12,8 @@ import Dashboard from "./Dashboard";
 
 import DocumentViewer from "./DocumentViewer";
 
+import DocumentAnalysis from "./DocumentAnalysis";
+
 import Documents from "./Documents";
 
 import Home from "./Home";
@@ -56,6 +58,8 @@ const PAGES = {
     
     DocumentViewer: DocumentViewer,
     
+    DocumentAnalysis: DocumentAnalysis,
+
     Documents: Documents,
     
     Home: Home,
@@ -123,6 +127,8 @@ function PagesContent() {
                 
                 <Route path="/DocumentViewer" element={<DocumentViewer />} />
                 
+                <Route path="/DocumentAnalysis" element={<DocumentAnalysis />} />
+
                 <Route path="/Documents" element={<Documents />} />
                 
                 <Route path="/Home" element={<Home />} />
