@@ -245,9 +245,9 @@ export default function DocumentViewer() {
           <div className={`${isFullscreen ? 'flex-1 bg-slate-900' : 'flex-1 bg-white rounded-lg shadow-lg'} overflow-hidden`}>
             {document.file_type === 'pdf' ? (
               <iframe
-                src={`https://mozilla.github.io/pdf.js/web/viewer.html?file=${encodeURIComponent(document.file_url)}`}
+                src={document.file_url}
                 className="w-full h-full"
-                style={isFullscreen ? { height: '100%' } : { 
+                style={isFullscreen ? { height: '100%' } : {
                   height: 'calc(100vh - 140px)',
                   minHeight: '500px'
                 }}
