@@ -4,15 +4,15 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "../utils";
-import { 
-  ArrowLeft, Download, Star, Trash2, ZoomIn, ZoomOut,
+import {
+  ArrowLeft, Download, Star, Trash2,
   Maximize2, Minimize2, FileText, Loader2, Sparkles, Share2
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import ShareDocumentModal from "../components/permissions/ShareDocumentModal";
+import NativePdfViewer from "../components/documents/NativePdfViewer";
 
 export default function DocumentViewer() {
-  const [zoom, setZoom] = useState(100);
   const [showSummary, setShowSummary] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -143,31 +143,6 @@ export default function DocumentViewer() {
               </div>
 
               <div className="flex items-center gap-0.5 sm:gap-1 md:gap-2 flex-shrink-0">
-              {/* Zoom Controls - Hidden on mobile and tablet */}
-              {document.file_type === 'pdf' && (
-                <div className="hidden lg:flex items-center gap-2 mr-2 lg:mr-4">
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-10 w-10 lg:h-12 lg:w-12"
-                    onClick={() => setZoom(Math.max(50, zoom - 10))}
-                  >
-                    <ZoomOut className="w-5 h-5 lg:w-6 lg:h-6" />
-                  </Button>
-                  <span className="text-xs lg:text-sm text-slate-600 w-10 lg:w-12 text-center font-semibold">
-                    {zoom}%
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-10 w-10 lg:h-12 lg:w-12"
-                    onClick={() => setZoom(Math.min(200, zoom + 10))}
-                  >
-                    <ZoomIn className="w-5 h-5 lg:w-6 lg:h-6" />
-                  </Button>
-                </div>
-              )}
-
               {/* Fullscreen Toggle */}
               <Button
                 variant="outline"
@@ -244,15 +219,19 @@ export default function DocumentViewer() {
           {/* Main Document Viewer */}
           <div className={`${isFullscreen ? 'flex-1 bg-slate-900' : 'flex-1 bg-white rounded-lg shadow-lg'} overflow-hidden`}>
             {document.file_type === 'pdf' ? (
-              <iframe
-                src={`https://mozilla.github.io/pdf.js/web/viewer.html?file=${encodeURIComponent(document.file_url)}`}
-                className="w-full h-full"
-                style={isFullscreen ? { height: '100%' } : { 
+              <div
+                className="w-full"
+                style={isFullscreen ? { height: '100%' } : {
                   height: 'calc(100vh - 140px)',
                   minHeight: '500px'
                 }}
-                title={document.title}
-              />
+              >
+                <NativePdfViewer
+                  fileUrl={document.file_url}
+                  title={document.title}
+                  isFullscreen={isFullscreen}
+                />
+              </div>
             ) : ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(document.file_type?.toLowerCase()) ? (
               <div className={`flex items-center justify-center ${isFullscreen ? 'h-full' : 'p-8'}`}>
                 <img 
