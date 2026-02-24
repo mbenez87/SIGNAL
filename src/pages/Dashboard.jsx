@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
 import { base44 } from '@/api/base44Client';
 import { invokeGeminiLLM, isGeminiConfigured } from '@/api/geminiClient';
+import { sendChatMessage, isChatConfigured, getChatProviderLabel } from '@/api/openaiClient';
 import { cn } from '@/lib/utils';
 import ReactMarkdown from 'react-markdown';
 import {
@@ -82,28 +83,36 @@ export default function Dashboard() {
 
   const handleSendMessage = async () => {
     if (!inputMessage.trim() || isAriaThinking) return;
-    
+
     const userMsg = inputMessage;
     setInputMessage('');
-    setChatMessages(prev => [...prev, { role: 'user', content: userMsg }]);
+    const updatedHistory = [...chatMessages, { role: 'user', content: userMsg }];
+    setChatMessages(updatedHistory);
     setIsAriaThinking(true);
 
     try {
-      const response = await base44.functions.invoke('aria', {
-        query: userMsg,
-        mode: 'chat'
+      const systemPrompt = `You are Aria, the AI assistant for Signal87 AI — a document intelligence platform.
+You help users manage documents, find information, generate insights, and answer questions about their files.
+The user currently has ${documents.length} document${documents.length !== 1 ? 's' : ''} in their workspace.
+Be concise, helpful, and professional. Use plain text unless a list or code block genuinely helps.`;
+
+      const response = await sendChatMessage({
+        messages: updatedHistory,
+        systemPrompt,
       });
 
       setChatMessages(prev => [...prev, {
         role: 'assistant',
-        content: response.data?.content || "I'm sorry, I couldn't process that request.",
-        model_used: response.data?.model_used
+        content: response.content,
+        model_used: response.model_used,
       }]);
     } catch (error) {
       console.error('Aria chat error:', error);
       setChatMessages(prev => [...prev, {
         role: 'assistant',
-        content: "I encountered an error. Please try again."
+        content: isChatConfigured()
+          ? `I encountered an error (${error.message}). Please try again.`
+          : "Chat is not configured. Add VITE_OPENAI_API_KEY or VITE_PERPLEXITY_API_KEY to your .env file.",
       }]);
     }
     setIsAriaThinking(false);
@@ -515,7 +524,7 @@ Generate a detailed, actionable response:`;
               </button>
             </div>
             <p className="text-xs text-gray-500 mt-2 text-center">
-              Aria uses intelligent routing across multiple AI models
+              Powered by {getChatProviderLabel()}
             </p>
           </div>
         </div>
