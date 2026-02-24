@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
 import { base44 } from '@/api/base44Client';
+import { invokeGeminiLLM, isGeminiConfigured } from '@/api/geminiClient';
 import { cn } from '@/lib/utils';
 import ReactMarkdown from 'react-markdown';
 import {
@@ -138,18 +139,29 @@ INSTRUCTIONS:
 
 Generate a detailed, actionable response:`;
 
-      const response = await base44.integrations.Core.InvokeLLM({
-        prompt,
-        add_context_from_internet: includeWebSearch,
-        response_json_schema: {
-          type: "object",
-          properties: {
-            content: { type: "string", description: "The full generated content in Markdown" },
-            sources_used: { type: "array", items: { type: "string" } },
-            confidence: { type: "number" }
-          }
+      const generateSchema = {
+        type: "object",
+        properties: {
+          content: { type: "string", description: "The full generated content in Markdown" },
+          sources_used: { type: "array", items: { type: "string" } },
+          confidence: { type: "number" }
         }
-      });
+      };
+
+      let response;
+      if (isGeminiConfigured()) {
+        console.log('[Gemini] Running report generation via Gemini 2.0 Flash');
+        response = await invokeGeminiLLM({
+          prompt,
+          response_json_schema: generateSchema,
+        });
+      } else {
+        response = await base44.integrations.Core.InvokeLLM({
+          prompt,
+          add_context_from_internet: includeWebSearch,
+          response_json_schema: generateSchema,
+        });
+      }
 
       setGeneratedContent(response);
     } catch (error) {
