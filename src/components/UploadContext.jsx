@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { base44 } from "@/api/base44Client";
+import { invokeGeminiLLM, isGeminiConfigured } from "@/api/geminiClient";
 import { useWorkspace } from "@/components/workspace/WorkspaceContext";
 
 const UploadContext = createContext();
@@ -85,7 +86,7 @@ export const UploadProvider = ({ children }) => {
     throw lastErr;
   }, []);
 
-  const processAIAnalysisInBackground = useCallback(async (document, file_url, fileName) => {
+  const processAIAnalysisInBackground = useCallback(async (document, file_url, fileName, originalFile) => {
     try {
       let aiAnalysis = { summary: '', key_insights: [], suggested_tags: [] };
       let extractedContent = '';
@@ -124,8 +125,7 @@ export const UploadProvider = ({ children }) => {
         };
         extractedContent = `Large PDF file: ${fileName} (${(document.file_size / 1024 / 1024).toFixed(1)}MB). AI content extraction was skipped due to size limitations. Please review manually or consider splitting into smaller documents for automated analysis.`;
       } else {
-        const llmResult = await base44.integrations.Core.InvokeLLM({
-          prompt: `Analyze the attached document and provide:
+        const analysisPrompt = `Analyze the attached document and provide:
 1. A concise summary (2-3 sentences).
 2. 3-5 key insights and important points.
 3. A list of relevant tags for organization.
@@ -137,19 +137,35 @@ IMPORTANT TAGGING RULES:
 - If the document appears to be an "invoice", "bill", or "receipt", include the tag "invoice".
 - If the document is a "master services agreement" or "MSA", include the tag "msa".
 
-If you cannot read the document (e.g., it's a non-text image), state that analysis is not possible.`,
-          file_urls: [file_url],
-          response_json_schema: {
-            type: "object",
-            properties: {
-              summary: { type: "string" },
-              key_insights: { type: "array", items: { type: "string" } },
-              suggested_tags: { type: "array", items: { type: "string" } },
-              extracted_content: { type: "string" }
-            }
+If you cannot read the document (e.g., it's a non-text image), state that analysis is not possible.`;
+
+        const analysisSchema = {
+          type: "object",
+          properties: {
+            summary: { type: "string" },
+            key_insights: { type: "array", items: { type: "string" } },
+            suggested_tags: { type: "array", items: { type: "string" } },
+            extracted_content: { type: "string" }
           }
-        });
-        
+        };
+
+        let llmResult;
+        if (isGeminiConfigured()) {
+          console.log('[Gemini] Running document analysis via Gemini 2.0 Flash');
+          llmResult = await invokeGeminiLLM({
+            prompt: analysisPrompt,
+            file: originalFile,
+            file_url,
+            response_json_schema: analysisSchema,
+          });
+        } else {
+          llmResult = await base44.integrations.Core.InvokeLLM({
+            prompt: analysisPrompt,
+            file_urls: [file_url],
+            response_json_schema: analysisSchema,
+          });
+        }
+
         aiAnalysis = llmResult;
         extractedContent = llmResult.extracted_content || '';
       }
@@ -262,7 +278,7 @@ If you cannot read the document (e.g., it's a non-text image), state that analys
         file_url_exists: !!file_url
       });
 
-      processAIAnalysisInBackground(createdDocument, file_url, file.name);
+      processAIAnalysisInBackground(createdDocument, file_url, file.name, file);
       
     } catch (error) {
       console.error('Error processing file:', error);

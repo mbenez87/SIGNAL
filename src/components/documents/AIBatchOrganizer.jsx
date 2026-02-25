@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { CheckCircle2, Sparkles, Loader2, FileText, Tag, Folder } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
+import { invokeGeminiLLM, isGeminiConfigured } from '@/api/geminiClient';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { toast } from 'sonner';
 
@@ -68,38 +69,49 @@ Return recommendations in this JSON format:
   ]
 }`;
 
-      const aiResponse = await base44.integrations.Core.InvokeLLM({
-        prompt,
-        response_json_schema: {
-          type: "object",
-          properties: {
-            recommendations: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  document_id: { type: "string" },
-                  suggested_category: { type: "string" },
-                  suggested_tags: { type: "array", items: { type: "string" } },
-                  confidence: { type: "number" },
-                  reasoning: { type: "string" }
-                }
+      const batchOrgSchema = {
+        type: "object",
+        properties: {
+          recommendations: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                document_id: { type: "string" },
+                suggested_category: { type: "string" },
+                suggested_tags: { type: "array", items: { type: "string" } },
+                confidence: { type: "number" },
+                reasoning: { type: "string" }
               }
-            },
-            folder_structure: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  folder_name: { type: "string" },
-                  document_ids: { type: "array", items: { type: "string" } },
-                  reasoning: { type: "string" }
-                }
+            }
+          },
+          folder_structure: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                folder_name: { type: "string" },
+                document_ids: { type: "array", items: { type: "string" } },
+                reasoning: { type: "string" }
               }
             }
           }
         }
-      });
+      };
+
+      let aiResponse;
+      if (isGeminiConfigured()) {
+        console.log('[Gemini] Running batch organization via Gemini 2.0 Flash');
+        aiResponse = await invokeGeminiLLM({
+          prompt,
+          response_json_schema: batchOrgSchema,
+        });
+      } else {
+        aiResponse = await base44.integrations.Core.InvokeLLM({
+          prompt,
+          response_json_schema: batchOrgSchema,
+        });
+      }
 
       setProgress(60);
       setCurrentStep('Preparing recommendations...');

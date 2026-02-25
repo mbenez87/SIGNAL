@@ -8,6 +8,7 @@ import {
 "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { base44 } from "@/api/base44Client";
+import { sendChatMessage, isChatConfigured, getChatProviderLabel } from "@/api/openaiClient";
 import { toast } from "sonner";
 import DocumentSelectorModal from "../components/intelligence/DocumentSelectorModal";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -35,21 +36,26 @@ export default function Intelligence() {
     scrollToBottom();
   }, [messages]);
 
-  // Create conversation on mount after user is authenticated
+  // Assign a local session ID on mount (replaces Base44 agent conversation).
+  // Also restores a saved chat when a ?chatId= param is present.
   useEffect(() => {
+    if (!conversationId) {
+      setConversationId(crypto.randomUUID());
+    }
+
     const loadSavedChat = async () => {
       const urlParams = new URLSearchParams(window.location.search);
       const chatId = urlParams.get('chatId');
-      
+
       if (chatId && chatId !== loadedChatId) {
         try {
           const savedChat = await base44.entities.SavedChat.filter({ id: chatId });
           if (savedChat.length > 0) {
             const chat = savedChat[0];
             setMessages(chat.messages || []);
-            setConversationId(chat.conversation_id);
-            setCurrentMode(chat.mode || 'chat');
-            setSelectedDocIds(chat.document_ids || []);
+            setConversationId(chat.conversation_id || crypto.randomUUID());
+            setWorkflowMode(chat.mode || null);
+            setSelectedDocs(chat.document_ids || []);
             setLoadedChatId(chatId);
             toast.success(`Loaded: ${chat.title}`);
           }
@@ -61,48 +67,8 @@ export default function Intelligence() {
     };
 
     loadSavedChat();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadedChatId]);
-
-  useEffect(() => {
-    const initConversation = async () => {
-      if (!conversationId) {
-        try {
-          // Check if user is authenticated first
-          const isAuth = await base44.auth.isAuthenticated();
-          if (!isAuth) {
-            // Redirect to login if not authenticated
-            base44.auth.redirectToLogin(window.location.pathname);
-            return;
-          }
-
-          const conversation = await base44.agents.createConversation({
-            agent_name: "aria",
-            metadata: {
-              name: "ARIA Intelligence Session",
-              description: "Document intelligence conversation"
-            }
-          });
-          setConversationId(conversation.id);
-        } catch (error) {
-          console.error("Error creating conversation:", error);
-          toast.error("Failed to initialize conversation. Please refresh the page.");
-        }
-      }
-    };
-    initConversation();
-  }, [conversationId]);
-
-  // Subscribe to conversation updates
-  useEffect(() => {
-    if (!conversationId) return;
-
-    const unsubscribe = base44.agents.subscribeToConversation(conversationId, (data) => {
-      setMessages(data.messages || []);
-      setIsLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, [conversationId]);
 
   const workflowButtons = [
   {
@@ -137,14 +103,39 @@ export default function Intelligence() {
   }];
 
 
+  const buildSystemPrompt = (docs, mode) => {
+    const modeInstructions = {
+      report:    "Generate a comprehensive structured report with clearly labelled sections, an executive summary, and conclusions.",
+      insights:  "Extract and highlight key patterns, opportunities, risks, and anomalies from the provided content.",
+      trends:    "Identify temporal patterns, directional changes, and emerging themes across the documents.",
+      research:  "Perform deep multi-step research synthesis. Cross-reference sources, surface contradictions, and produce a well-cited analysis.",
+    };
+
+    let prompt = `You are Aria V2, the advanced document intelligence AI for Signal87 AI.
+You specialise in document analysis, report generation, research synthesis, and business intelligence.
+Use Markdown formatting with clear headers, bullet lists, and emphasis where it aids readability.
+Powered by: ${getChatProviderLabel()}.`;
+
+    if (mode && modeInstructions[mode]) {
+      prompt += `\n\nActive Mode — ${mode.charAt(0).toUpperCase() + mode.slice(1)}: ${modeInstructions[mode]}`;
+    }
+
+    if (docs.length > 0) {
+      prompt += `\n\nDocument Context (${docs.length} document${docs.length !== 1 ? 's' : ''} selected for this query):`;
+      docs.forEach(doc => {
+        prompt += `\n\n**${doc.title}**`;
+        if (doc.ai_summary)            prompt += `\nSummary: ${doc.ai_summary}`;
+        if (doc.key_insights?.length)  prompt += `\nKey Insights: ${doc.key_insights.join('; ')}`;
+        if (doc.extracted_content)     prompt += `\nContent Preview: ${doc.extracted_content.slice(0, 800)}`;
+      });
+    }
+
+    return prompt;
+  };
+
   const handleSend = async () => {
     if (!input.trim() || isLoading) {
       if (!input.trim()) toast.error("Please enter a message");
-      return;
-    }
-
-    if (!conversationId) {
-      toast.error("Conversation not ready. Please wait...");
       return;
     }
 
@@ -152,33 +143,40 @@ export default function Intelligence() {
     const query = input;
     setInput("");
 
+    let messageContent = query;
+    if (workflowMode) {
+      messageContent = `[Mode: ${workflowMode}] ${query}`;
+    }
+    if (selectedDocs.length > 0) {
+      messageContent += `\n\nFocus on these documents: ${selectedDocs.map(d => d.title).join(", ")}`;
+    }
+
+    const userMessage = { role: "user", content: messageContent };
+    const updatedMessages = [...messages, userMessage];
+    setMessages(updatedMessages);
+
     try {
-      // Get current conversation
-      const conversation = await base44.agents.getConversation(conversationId);
-
-      // Build message with workflow context
-      let messageContent = query;
-      if (workflowMode) {
-        messageContent = `[Mode: ${workflowMode}] ${query}`;
-      }
-      if (selectedDocs.length > 0) {
-        messageContent += `\n\nFocus on these documents: ${selectedDocs.map((d) => `doc://${d.id} (${d.title})`).join(", ")}`;
-      }
-
-      // Add message to conversation
-      await base44.agents.addMessage(conversation, {
-        role: "user",
-        content: messageContent
+      const response = await sendChatMessage({
+        messages: updatedMessages,
+        systemPrompt: buildSystemPrompt(selectedDocs, workflowMode),
       });
+
+      setMessages(prev => [...prev, {
+        role: "assistant",
+        content: response.content,
+        model_used: response.model_used,
+      }]);
 
       setWorkflowMode(null);
       setSelectedDocs([]);
     } catch (error) {
       console.error("Error sending message:", error);
       toast.error("Failed to send message: " + (error.message || "Unknown error"));
-      setIsLoading(false);
-      setInput(query); // Restore the message
+      setMessages(prev => prev.slice(0, -1)); // remove the optimistic user message
+      setInput(query);
     }
+
+    setIsLoading(false);
   };
 
   const handleKeyPress = (e) => {
@@ -196,37 +194,41 @@ export default function Intelligence() {
 
     // If documents are selected, auto-submit with the workflow
     if (selectedDocs.length > 0) {
-      if (!conversationId) {
-        toast.error("Conversation not ready. Please wait...");
-        return;
-      }
-
       setIsLoading(true);
       const modeLabels = {
-        report: "Generate a comprehensive report",
+        report:   "Generate a comprehensive report",
         insights: "Extract key insights and patterns",
-        trends: "Analyze trends and patterns over time",
-        research: "Perform deep research and analysis"
+        trends:   "Analyze trends and patterns over time",
+        research: "Perform deep research and analysis",
       };
 
       const prompt = modeLabels[mode] || "Analyze these documents";
+      const messageContent = `[Mode: ${mode}] ${prompt}\n\nFocus on these documents: ${selectedDocs.map(d => d.title).join(", ")}`;
+      const userMessage = { role: "user", content: messageContent };
+      const updatedMessages = [...messages, userMessage];
+      setMessages(updatedMessages);
 
       try {
-        const conversation = await base44.agents.getConversation(conversationId);
-        const messageContent = `[Mode: ${mode}] ${prompt}\n\nFocus on these documents: ${selectedDocs.map((d) => `doc://${d.id} (${d.title})`).join(", ")}`;
-
-        await base44.agents.addMessage(conversation, {
-          role: "user",
-          content: messageContent
+        const response = await sendChatMessage({
+          messages: updatedMessages,
+          systemPrompt: buildSystemPrompt(selectedDocs, mode),
         });
+
+        setMessages(prev => [...prev, {
+          role: "assistant",
+          content: response.content,
+          model_used: response.model_used,
+        }]);
 
         setSelectedDocs([]);
         setWorkflowMode(null);
       } catch (error) {
         console.error("Error sending message:", error);
         toast.error("Failed to send message: " + (error.message || "Unknown error"));
-        setIsLoading(false);
+        setMessages(prev => prev.slice(0, -1));
       }
+
+      setIsLoading(false);
     } else {
       // No documents selected, just set the mode
       setWorkflowMode(mode);
