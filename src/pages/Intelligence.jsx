@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -28,6 +29,17 @@ export default function Intelligence() {
   const textareaRef = useRef(null);
   const messagesEndRef = useRef(null);
 
+  const { data: user, isLoading: isUserLoading } = useQuery({
+    queryKey: ['currentUser'],
+    queryFn: () => base44.auth.me(),
+  });
+
+  useEffect(() => {
+    if (!isUserLoading && !user) {
+      base44.auth.redirectToLogin();
+    }
+  }, [user, isUserLoading]);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -55,7 +67,23 @@ export default function Intelligence() {
             setMessages(chat.messages || []);
             setConversationId(chat.conversation_id || crypto.randomUUID());
             setWorkflowMode(chat.mode || null);
-            setSelectedDocs(chat.document_ids || []);
+
+            // Hydrate plain IDs → full document objects so title/summary/content are available
+            if (chat.document_ids && chat.document_ids.length > 0) {
+              try {
+                const hydrated = await Promise.all(
+                  chat.document_ids.map(id =>
+                    base44.entities.Document.filter({ id }).then(r => r[0] ?? null)
+                  )
+                );
+                setSelectedDocs(hydrated.filter(Boolean));
+              } catch {
+                setSelectedDocs([]);
+              }
+            } else {
+              setSelectedDocs([]);
+            }
+
             setLoadedChatId(chatId);
             toast.success(`Loaded: ${chat.title}`);
           }
